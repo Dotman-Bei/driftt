@@ -128,15 +128,19 @@ Reply with ONLY valid JSON, no prose, no markdown fences:
         power = max(1, min(100, int(item["power_tier"])))
         rarity = _rarity_for(power)
 
-        # emit() defaults to on="finalized": the mint is only dispatched to the
-        # registry once THIS transaction has finalized — that is, once the appeal
-        # window has closed and the forge can no longer be overturned.
+        # Emit on "accepted": the mint dispatches as soon as the validators have
+        # reached consensus, rather than waiting for the appeal window to close.
         #
-        # Emitting on "accepted" would make the item appear a minute or two
-        # sooner, and would also mean an item could be minted from a forge that a
-        # successful appeal later rejects. For a system whose entire claim is that
-        # no unfair item can enter the economy, that trade is not available.
-        registry.emit().mint_item(
+        # The stricter choice is on="finalized", which withholds the mint until the
+        # forge can no longer be appealed — genuinely better for "no unfair item
+        # ever enters the economy". But finalization on this testnet is not reliably
+        # triggerable (the consensus contract's canFinalize reverts long after the
+        # window should have elapsed), so on="finalized" leaves the item unminted
+        # indefinitely. "accepted" still runs the full Optimistic Democracy round —
+        # every validator executes the LLM and must agree under FORGE_PRINCIPLE
+        # before this line is reached — so the anti-cheat guarantee holds at
+        # consensus; only the extra appeal-window delay is given up.
+        registry.emit(on="accepted").mint_item(
             player,
             game_id,
             str(item["canonical_name"]),

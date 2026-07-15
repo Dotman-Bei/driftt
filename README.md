@@ -125,10 +125,10 @@ Live on the GenLayer testnet (chain id `4221`, via `https://rpc-bradbury.genlaye
 
 | Contract | Address |
 |---|---|
-| `ItemRegistry` | `0x6ADf32E7e39404bBe3647Bee157a5Ad05Fb25Db7` |
-| `ItemForge` | `0x2f4081A8c608250098ECcAA8BC558a5A66404F87` |
-| `TranslationEngine` | `0x87bB55438F99Bd507d1e24dDAfe6C025F5c3e933` |
-| `EvolutionTracker` | `0x6D8d557FD1aDCf2d5387bc2a6c632225653D798b` |
+| `ItemRegistry` | `0x7CFaB40bbA3b45b67762C897426d813C7BCA2bC3` |
+| `ItemForge` | `0x25c9afC1FAE50c5C5a42B88Faf7BB1d0cc982285` |
+| `TranslationEngine` | `0xA27382DEB028640dC162A9f4f8843564201F529A` |
+| `EvolutionTracker` | `0x681f4610F0f6C0169942909ab3dA0220853f4552` |
 
 Both games' rulesets are registered on-chain in the registry. Redeploy with:
 
@@ -233,10 +233,31 @@ retry. The simulated mode has neither problem, which is why it stays the default
 
 ## What is actually verified
 
-**On-chain.** All four contracts are deployed to the live GenLayer testnet, every one of them
-answers a view call, and both games' rulesets are stored in the registry (747 and 874 chars,
-read back from the chain). `ItemForge.forge_item` has been executed by real validators, which
-reached consensus on it under the Equivalence Principle.
+**On-chain.** All four contracts are deployed to the live GenLayer testnet and every one
+answers a view call. Both games' rulesets are stored in the registry (747 and 874 chars, read
+back from the chain). Specifically, the following were exercised against the live contracts:
+
+- **`ItemForge.forge_item` runs the LLM under consensus.** Real validators executed the
+  non-deterministic method, agreed under the Equivalence Principle (`result: AGREE`,
+  `FINISHED_WITH_RETURN`), and the contract's `forged_count` incremented. The emitted
+  `mint_item` message carried the model's actual output — a "Cinderbrand" fire longsword —
+  proving the AI generation happened on-chain, not off it.
+- **`ItemForge` reads the registry cross-contract.** `forge_item` loads the target game's
+  ruleset via `get_contract_at(registry).view().get_game_ruleset(...)` — a real
+  contract-to-contract call inside the intelligent method.
+- **`ItemRegistry` stores and serves items.** A `mint_item` call took the registry's
+  `item_count` from 0 to 1; the item reads back by id, by owner (`get_items_by_owner`), and
+  in the activity log. Item 0 ("Cinderbrand", epic, tier 72) is on the chain now.
+
+**One thing does not complete on this testnet: the automatic hop from forge to registry.**
+`forge_item` emits `mint_item` for the registry to execute, but on this network an emitted
+cross-contract message is only dispatched when the emitting transaction *finalizes*, and
+finalization is not currently triggerable here — the consensus contract's `canFinalize`
+reverts indefinitely after acceptance. So the forge's own auto-mint is stuck behind that,
+even though every piece of it (LLM, consensus, the emitted message with real data, and the
+registry's ability to store the item) is independently proven above. The `web/scripts`
+demonstrate each half against the live chain: `forge-onchain.mjs` (the intelligent forge) and
+`mint-onchain.mjs` (the registry write).
 
 **Off-chain**, end-to-end against the local server with the offline generator:
 

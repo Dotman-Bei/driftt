@@ -53,49 +53,21 @@ console.log(
 );
 
 /*
-  The forge emits mint_item with emit()'s default on="finalized": the registry is
-  only written once THIS transaction finalizes — once the appeal window has closed
-  and the forge can no longer be overturned.
-
-  Finalization is PERMISSIONLESS AND MUST BE TRIGGERED. The chain does not
-  finalize an accepted transaction on a timer; someone has to call
-  finalizeTransaction once canFinalize() says the window is closed. In production
-  that is a keeper; here, we do it ourselves. Nothing mints until it happens.
+  The forge emits mint_item on="accepted", so the registry is written once the
+  emitted sub-transaction reaches consensus — no finalization to trigger. That
+  sub-transaction is itself a write that has to be accepted, so the item count
+  lags the forge by one short consensus round; poll until it lands.
 */
-const txId = receipt?.txId ?? receipt?.tx_id;
-console.log(`\ntx ${txId}`);
-console.log("waiting for the appeal window to close, then finalizing ...");
+console.log(`\ntx ${receipt?.txId ?? receipt?.tx_id}`);
+console.log("forge accepted — waiting for the emitted mint to reach consensus ...");
 
-const deadline = Date.now() + 15 * 60 * 1000;
+const deadline = Date.now() + 8 * 60 * 1000;
 let after = before;
-let finalized = false;
 
 while (Date.now() < deadline && after === before) {
   await sleep(12000);
-
-  try {
-    if (!finalized && (await client.canFinalize({ txId }))) {
-      process.stdout.write("  appeal window closed — finalizing ... ");
-      await client.finalizeTransaction({ txId });
-      finalized = true;
-      console.log("submitted");
-    }
-  } catch (err) {
-    // Another party may have finalized it first, or the RPC blipped. Either is fine.
-    if (!/already|finalized/i.test(String(err.message))) {
-      process.stdout.write("~");
-    }
-  }
-
-  let status = "?";
-  try {
-    status = (await client.getTransaction({ hash: txId }))?.statusName ?? "?";
-  } catch {
-    /* transport blip — the chain does not care that we lost the connection */
-  }
-
   after = Number(await read(client, contracts.ItemRegistry, "get_item_count"));
-  console.log(`  status ${String(status).padEnd(10)} items ${after}`);
+  console.log(`  items ${after}`);
 }
 
 console.log(`\nitems in registry after: ${after}`);

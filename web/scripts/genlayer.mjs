@@ -152,7 +152,20 @@ export async function send(client, { address, functionName, args }, attempts = 5
 export async function deployContract(client, file, args, attempts = 4) {
   const code = readFileSync(resolve(CONTRACTS_DIR, file));
   for (let i = 1; i <= attempts; i++) {
-    const hash = await client.deployContract({ code, args });
+    // The submission itself can fail on a transport blip (ECONNRESET / dropped
+    // socket) before the deploy is even accepted. Nothing is on-chain yet, so
+    // re-submitting is safe.
+    let hash;
+    for (let j = 1; ; j++) {
+      try {
+        hash = await client.deployContract({ code, args });
+        break;
+      } catch (err) {
+        if (!isNetworkBlip(err) || j >= 5) throw err;
+        process.stdout.write("^");
+        await sleep(6000);
+      }
+    }
     const receipt = await waitForReceipt(client, hash);
     try {
       assertExecuted(receipt, file);

@@ -130,8 +130,11 @@ class ItemRegistry(gl.Contract):
             lore,
             artwork_uri,
         )
-        self.owner_index[owner].append(item_id)
-        self.history[item_id].append(
+        # TreeMap does NOT auto-create a value for a missing key — self.map[k] on
+        # an absent key raises KeyError. get_or_insert_default returns the stored
+        # DynArray, creating an empty one first if this owner / item is new.
+        self.owner_index.get_or_insert_default(owner).append(item_id)
+        self.history.get_or_insert_default(item_id).append(
             json.dumps(
                 {
                     "kind": "forged",
@@ -165,7 +168,7 @@ class ItemRegistry(gl.Contract):
         """
         self._require_authorized()
         assert item_id in self.items, "registry: unknown item"
-        self.history[item_id].append(entry)
+        self.history.get_or_insert_default(item_id).append(entry)
 
     @gl.public.write
     def apply_evolution(
@@ -191,7 +194,7 @@ class ItemRegistry(gl.Contract):
         sender = gl.message.sender_address
         assert item.owner == sender, "registry: not the owner"
 
-        held = self.owner_index[sender]
+        held = self.owner_index.get_or_insert_default(sender)
         for i in range(len(held)):
             if held[i] == item_id:
                 held[i] = held[len(held) - 1]
@@ -199,7 +202,7 @@ class ItemRegistry(gl.Contract):
                 break
 
         item.owner = to
-        self.owner_index[to].append(item_id)
+        self.owner_index.get_or_insert_default(to).append(item_id)
         self._log(
             json.dumps(
                 {"kind": "transferred", "item_id": item_id, "to": to.as_hex}

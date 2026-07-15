@@ -133,8 +133,13 @@ Reply with ONLY valid JSON, no prose, no markdown fences:
         lore_chapter = str(parsed["lore_chapter"])
         summary = str(parsed["evolution_summary"])
 
-        registry.emit().apply_evolution(item_id, new_power, new_rarity, lore_chapter)
-        registry.emit().append_history(
+        # on="accepted": dispatch at consensus rather than after the appeal window,
+        # since finalization is not reliably triggerable on this testnet. The growth
+        # cap is already enforced deterministically above.
+        registry.emit(on="accepted").apply_evolution(
+            item_id, new_power, new_rarity, lore_chapter
+        )
+        registry.emit(on="accepted").append_history(
             item_id,
             json.dumps(
                 {

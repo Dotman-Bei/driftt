@@ -162,7 +162,11 @@ Reply with ONLY valid JSON, no prose, no markdown fences:
         self.translations[key] = json.dumps(record)
         self.translation_count = self.translation_count + 1
 
-        registry.emit().append_history(
+        # on="accepted": the provenance entry is written at consensus, not after
+        # the appeal window. See the note in item_forge.py — finalization is not
+        # reliably triggerable on this testnet, and the balance guarantee is already
+        # enforced by consensus plus the deterministic clamp above.
+        registry.emit(on="accepted").append_history(
             item_id,
             json.dumps(
                 {
