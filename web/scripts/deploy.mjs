@@ -141,16 +141,17 @@ console.log(`  games on-chain     ${games.map((g) => g.game_id).join(", ")}`);
 
 /* --------------------------------------------------------------- persistence */
 
+const chainName = process.env.GENLAYER_CHAIN ?? "testnet-bradbury";
+const chainMeta = {
+  "testnet-bradbury": { chain_id: 4221, rpc: "https://rpc-bradbury.genlayer.com" },
+  studionet: { chain_id: 61999, rpc: "https://studio.genlayer.com/api" },
+  localnet: { chain_id: 61127, rpc: "http://127.0.0.1:4000/api" },
+}[chainName] ?? {};
+
 writeFileSync(
   resolve(CONTRACTS_DIR, "deployments.json"),
   JSON.stringify(
-    {
-      chain: "testnet-bradbury",
-      chain_id: 4221,
-      rpc: "https://rpc-bradbury.genlayer.com",
-      deployer: account.address,
-      contracts,
-    },
+    { chain: chainName, ...chainMeta, deployer: account.address, contracts },
     null,
     2,
   ) + "\n",
@@ -164,7 +165,7 @@ if (existsSync(envLocal)) {
     if (m) lines.set(m[1], m[2]);
   }
 }
-lines.set("NEXT_PUBLIC_GENLAYER_CHAIN", "testnet-bradbury");
+lines.set("NEXT_PUBLIC_GENLAYER_CHAIN", chainName);
 lines.set("NEXT_PUBLIC_ITEM_REGISTRY", registry);
 lines.set("NEXT_PUBLIC_ITEM_FORGE", forge);
 lines.set("NEXT_PUBLIC_TRANSLATION_ENGINE", translator);

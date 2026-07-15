@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { translate, usingLLM } from "@/lib/oracle";
+import { CHAIN_WRITES_ENABLED, translateOnChain } from "@/lib/serverChain";
 import type { GameId, Item } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// An on-chain translation waits on validator consensus.
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
@@ -25,8 +27,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // On chain, request_translation reads the item from the registry by id, so the
+    // item must have been forged on-chain (its itemId is the real registry id).
+    if (CHAIN_WRITES_ENABLED) {
+      const result = await translateOnChain(body.item, body.targetGame);
+      return NextResponse.json({ ...result, usingChain: true, usingLLM: true });
+    }
+
     const result = await translate(body.item, body.targetGame);
-    return NextResponse.json({ ...result, usingLLM });
+    return NextResponse.json({ ...result, usingChain: false, usingLLM });
   } catch (err) {
     console.error("translate failed", err);
     return NextResponse.json(

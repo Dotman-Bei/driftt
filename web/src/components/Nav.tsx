@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { connect, disconnect, useDriftt, CHAIN_MODE } from "@/lib/store";
+import { connect, disconnect, useDriftt } from "@/lib/store";
 
 const LINKS = [
   { href: "/inventory", label: "Inventory" },
@@ -102,7 +102,7 @@ export function Nav() {
               transparent ? "text-[#CACACA]" : "text-[#606060]"
             }`}
           >
-            {CHAIN_MODE ? "GenLayer testnet" : "Simulated consensus"}
+            GenLayer testnet
           </span>
 
           {address ? (

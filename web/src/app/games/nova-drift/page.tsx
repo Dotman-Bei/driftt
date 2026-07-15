@@ -2,8 +2,23 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { playableIn, recordForge, useDriftt } from "@/lib/store";
-import type { Consensus, ForgeResult, Item } from "@/lib/types";
+import {
+  CONTRACTS_DEPLOYED,
+  ensureAddress,
+  playableIn,
+  recordChainForge,
+  recordForge,
+  useDriftt,
+} from "@/lib/store";
+import type { Consensus, Item } from "@/lib/types";
+
+interface ForgeResponse {
+  item: Item;
+  consensus: Consensus;
+  error?: string;
+  usingChain?: boolean;
+  txId?: string;
+}
 import {
   NovaDrift,
   STOCK,
@@ -21,6 +36,7 @@ export default function NovaDriftPage() {
 
   const [loadout, setLoadout] = useState<Loadout>(STOCK);
   const [forging, setForging] = useState(false);
+  const [onChain, setOnChain] = useState(false);
   const [forged, setForged] = useState<Item | null>(null);
   const [consensus, setConsensus] = useState<Consensus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,22 +47,27 @@ export default function NovaDriftPage() {
       setForged(null);
       setConsensus(null);
       setError(null);
+      setOnChain(CONTRACTS_DEPLOYED); // optimistic; corrected from the response
+
+      const owner = ensureAddress();
 
       try {
         const res = await fetch("/api/forge", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gameId: "nova-drift", eventContext }),
+          body: JSON.stringify({ gameId: "nova-drift", eventContext, player: owner }),
         });
-        const data = (await res.json()) as ForgeResult & { error?: string };
+        const data = (await res.json()) as ForgeResponse;
         if (!res.ok) throw new Error(data.error ?? "the forge failed");
 
+        setOnChain(Boolean(data.usingChain));
         setConsensus(data.consensus);
         if (data.consensus.approved) {
-          const owner =
-            state.address ??
-            "0x" + Math.random().toString(16).slice(2, 10).padEnd(8, "0");
-          setForged(recordForge(owner, data.item, data.consensus));
+          setForged(
+            data.usingChain
+              ? recordChainForge(data.item, data.consensus)
+              : recordForge(owner, data.item, data.consensus),
+          );
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "the forge failed");
@@ -54,7 +75,7 @@ export default function NovaDriftPage() {
         setForging(false);
       }
     },
-    [state.address],
+    [],
   );
 
   return (
@@ -166,7 +187,13 @@ export default function NovaDriftPage() {
           <Eyebrow>The forge</Eyebrow>
 
           {forging && (
-            <ThinkingPulse label="An Intelligent Contract is designing your reward" />
+            <ThinkingPulse
+              label={
+                onChain
+                  ? "Forging on GenLayer — validators are running the LLM and reaching consensus (~1 min)"
+                  : "An Intelligent Contract is designing your reward"
+              }
+            />
           )}
 
           {error && <p className="font-mono text-sm text-[#FF2B2B]">{error}</p>}

@@ -121,22 +121,32 @@ That string *is* the integration.
 
 ## Deployed contracts
 
-Live on the GenLayer testnet (chain id `4221`, via `https://rpc-bradbury.genlayer.com`):
+The live app runs on **hosted GenLayer Studio** (`https://studio.genlayer.com/api`), where
+the same Intelligent Contracts and Optimistic Democracy consensus run in **seconds** rather
+than the public testnet's minutes — a forge or a translation completes reliably in under a
+minute, with no gas and no flakiness. This is what makes the games actually playable on-chain.
 
-| Contract | Address |
+| Contract | Studio address |
 |---|---|
-| `ItemRegistry` | `0x7CFaB40bbA3b45b67762C897426d813C7BCA2bC3` |
-| `ItemForge` | `0x25c9afC1FAE50c5C5a42B88Faf7BB1d0cc982285` |
-| `TranslationEngine` | `0xA27382DEB028640dC162A9f4f8843564201F529A` |
-| `EvolutionTracker` | `0x681f4610F0f6C0169942909ab3dA0220853f4552` |
+| `ItemRegistry` (forge + ledger) | `0x7A1BBd8eDc7850630C56a9Fc5A32dFc35a93976F` |
+| `ItemForge` | `0xEa4C7332a37A2D024F0202F055dc7414B66e7e69` |
+| `TranslationEngine` | `0x75468f7175eEF9D2e94Be67e2CF939c33871bC2C` |
+| `EvolutionTracker` | `0x2f2d4c2344F6FE65305E98A02eFacc1AA900B025` |
 
-Both games' rulesets are registered on-chain in the registry. Redeploy with:
+The contracts were also deployed to and proven on the **public Bradbury testnet** (chain id
+`4221`, `https://rpc-bradbury.genlayer.com`) — a real forge there reached `6 of 6` validator
+consensus and stored the item on-chain (addresses in
+[`contracts/deployments.testnet.json`](contracts/deployments.testnet.json)). The public testnet
+is durable but slow and flaky, so it stands as the "deployed on a public network" proof while
+Studio hosts the fast, playable app. Redeploy either with:
 
 ```bash
-node web/scripts/deploy.mjs             # deploys, wires, registers, writes web/.env.local
-node web/scripts/authorize.mjs          # re-run just the wiring, idempotent
-node web/scripts/forge-onchain.mjs "…"  # run a real forge through live validators
+GENLAYER_CHAIN=studionet node web/scripts/deploy.mjs   # hosted Studio (fast, default app chain)
+GENLAYER_CHAIN=testnet-bradbury node web/scripts/deploy.mjs   # public testnet
 ```
+
+Both deploy all four contracts, authorize the forge/translation/evolution methods, register
+the two games' rulesets, and rewrite `web/.env.local`.
 
 ### Three things the live chain taught us
 
@@ -177,40 +187,46 @@ It works immediately, with no wallet, no funded account, and no deployment.
 
 ### The two modes
 
-Driftt runs in one of two modes, and the difference is one environment variable.
+Gameplay (moving, fighting) is always instant and local. What changes is where the two
+**deliberate moments** — forging an item on a boss kill, translating it into another game —
+are settled.
 
-**Simulated consensus (default).** With no contract addresses configured, the leader /
-validator / equivalence-principle / appeal machinery in [`web/src/lib/oracle.ts`](web/src/lib/oracle.ts)
-executes off-chain and settles in the browser. This is the real consensus logic — three
-validators genuinely run independently and can genuinely disagree — it just is not
-settled on a blockchain.
+**On-chain (when a deployer key is configured).** If `web/.env.local` has both the contract
+addresses and a `GENLAYER_PRIVATE_KEY`, the `/api/forge` and `/api/translate` routes submit
+**real transactions** to the deployed Intelligent Contracts, server-side. The browser needs no
+wallet — the server relays and pays gas, and the player's address is passed through so the
+item is still owned by the player. Each of those moments then runs the LLM on every validator
+and waits for them to agree, so it takes **one to three minutes** and shows a "forging on
+GenLayer" state; the returned consensus data (`6 of 6 validators agreed`) is real. The
+inventory reads items straight from the on-chain registry. This is the mode the deployed
+contracts above run in.
 
-Without an `ANTHROPIC_API_KEY`, each validator runs a **seeded offline generator** instead of
-an LLM. Each validator is seeded differently, so they still produce independent, slightly
-different results, and the equivalence principle still does real work. Set the key to run
-genuine LLM reasoning:
+Because the intelligent methods write to storage the **registry itself** owns (rather than
+emitting a cross-contract message, which only dispatches at finalization — and finalization is
+not triggerable on this testnet), the forged item lands the moment consensus is reached. That
+restructure is what makes an on-chain forge actually complete here; see the note at the top of
+[`contracts/item_registry.py`](contracts/item_registry.py).
+
+**Simulated consensus (default, no key).** With no `GENLAYER_PRIVATE_KEY`, the same
+leader / validator / equivalence-principle / appeal machinery in
+[`web/src/lib/oracle.ts`](web/src/lib/oracle.ts) executes off-chain and settles in the browser
+— instant, free, and identical in shape to the on-chain result. Without an `ANTHROPIC_API_KEY`
+each validator runs a **seeded offline generator** instead of an LLM (independently seeded, so
+they still produce different results and the equivalence principle still does real work); set
+the key to run genuine LLM reasoning locally:
 
 ```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." > web/.env.local
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> web/.env.local
 ```
 
-**Live chain.** The contracts above are already deployed, and `web/.env.local` already
-points at them — so the frontend reads and writes real Intelligent Contracts, with consensus
-executed by real GenLayer validators. To deploy your own set:
+To deploy your own contracts and run the app fully on-chain:
 
 ```bash
 echo "GENLAYER_PRIVATE_KEY=0x..." > .env    # fund it at testnet-faucet.genlayer.foundation
-node web/scripts/deploy.mjs
+node web/scripts/deploy.mjs                 # deploys, wires, registers; writes web/.env.local
+# then add the same key to web/.env.local so the API routes can sign:
+echo "GENLAYER_PRIVATE_KEY=0x..." >> web/.env.local
 ```
-
-That deploys all four contracts, authorizes the three Intelligent Contracts to write to the
-registry, registers both games' rulesets, and rewrites `web/.env.local`. The frontend
-switches over with no code change.
-
-Expect the live path to be **slow**: every intelligent method runs an LLM on each validator
-and then waits for them to agree, so a forge or a translation takes on the order of a minute
-or two, and a write issued while the previous one is still settling will revert and need a
-retry. The simulated mode has neither problem, which is why it stays the default.
 
 ---
 

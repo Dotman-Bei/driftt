@@ -1,12 +1,12 @@
 {
-  "chain": "testnet-bradbury",
-  "chain_id": 4221,
-  "rpc": "https://rpc-bradbury.genlayer.com",
+  "chain": "studionet",
+  "chain_id": 61999,
+  "rpc": "https://studio.genlayer.com/api",
   "deployer": "0x16DDf06474B3617e689E0a878B8B8919e5e5AbE1",
   "contracts": {
-    "ItemRegistry": "0x7CFaB40bbA3b45b67762C897426d813C7BCA2bC3",
-    "ItemForge": "0x25c9afC1FAE50c5C5a42B88Faf7BB1d0cc982285",
-    "TranslationEngine": "0xA27382DEB028640dC162A9f4f8843564201F529A",
-    "EvolutionTracker": "0x681f4610F0f6C0169942909ab3dA0220853f4552"
+    "ItemRegistry": "0x7A1BBd8eDc7850630C56a9Fc5A32dFc35a93976F",
+    "ItemForge": "0xEa4C7332a37A2D024F0202F055dc7414B66e7e69",
+    "TranslationEngine": "0x75468f7175eEF9D2e94Be67e2CF939c33871bC2C",
+    "EvolutionTracker": "0x2f2d4c2344F6FE65305E98A02eFacc1AA900B025"
   }
 }

@@ -21,12 +21,23 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createAccount, createClient } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { testnetBradbury, studionet, localnet } from "genlayer-js/chains";
 import { CalldataAddress, TransactionStatus } from "genlayer-js/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, "..", "..");
 export const CONTRACTS_DIR = resolve(ROOT, "contracts");
+
+// Target chain, chosen with GENLAYER_CHAIN (default: the public Bradbury testnet).
+// studionet is the hosted GenLayer Studio — the same Intelligent Contracts and
+// consensus, but seconds per action instead of minutes, which is what makes the
+// live app playable.
+const CHAINS = {
+  "testnet-bradbury": testnetBradbury,
+  studionet,
+  localnet,
+};
+export const CHAIN = CHAINS[process.env.GENLAYER_CHAIN ?? "testnet-bradbury"] ?? testnetBradbury;
 
 /** Wrap a 0x-hex address so the GenVM sees an Address, not a string. */
 export function addr(hex) {
@@ -44,7 +55,7 @@ export function makeClient() {
     /GENLAYER_PRIVATE_KEY=(.+)/,
   )[1].trim();
   const account = createAccount(key);
-  return { account, client: createClient({ chain: testnetBradbury, account }) };
+  return { account, client: createClient({ chain: CHAIN, account }) };
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -98,8 +109,20 @@ export function assertExecuted(receipt, what) {
     );
   }
   const consensus = receipt?.statusName ?? receipt?.status;
-  if (["LEADER_TIMEOUT", "VALIDATORS_TIMEOUT", 12, 13].includes(consensus)) {
-    throw new TimeoutError(`${what}: consensus timed out (${consensus})`);
+  // Retryable consensus failures — no set formed, or validators couldn't agree
+  // this round. Nothing was committed, so a resubmit draws a fresh set. For a
+  // non-deterministic LLM method, an UNDETERMINED round is expected occasionally;
+  // it is the anti-cheat working, not a bug — retry and it usually converges.
+  const retryable = [
+    "LEADER_TIMEOUT",
+    "VALIDATORS_TIMEOUT",
+    "UNDETERMINED",
+    6,
+    12,
+    13,
+  ];
+  if (retryable.includes(consensus)) {
+    throw new TimeoutError(`${what}: consensus unresolved (${consensus})`);
   }
   if (!["ACCEPTED", "FINALIZED", 5, 7].includes(consensus)) {
     throw new Error(`${what}: no consensus (status ${consensus})`);

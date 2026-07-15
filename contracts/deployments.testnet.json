@@ -1,0 +1,12 @@
+{
+  "chain": "testnet-bradbury",
+  "chain_id": 4221,
+  "rpc": "https://rpc-bradbury.genlayer.com",
+  "deployer": "0x16DDf06474B3617e689E0a878B8B8919e5e5AbE1",
+  "contracts": {
+    "ItemRegistry": "0xAd5aDBB50d3b13cF1c18d7b0735B724249b1F7A9",
+    "ItemForge": "0x647C8171B15Edc63811E9e0713d3781f42033ADa",
+    "TranslationEngine": "0xFedFBD1360337bB39Fa9EABBf06884de4aD4b4b8",
+    "EvolutionTracker": "0xF1f38049a1C7927f857946550f9c444B48D647cc"
+  }
+}

@@ -9,7 +9,7 @@ import type {
   ProvenanceEntry,
   Translation,
 } from "./types";
-import { CHAIN_MODE } from "./chain";
+import { CHAIN_MODE, CONTRACTS_DEPLOYED } from "./chain";
 
 /*
   The player's cross-game inventory.
@@ -112,6 +112,20 @@ export function connect(address: string) {
   commit({ ...state, address });
 }
 
+/**
+ * The current player address, or a fresh valid one that is persisted so it stays
+ * stable across forges — the on-chain path needs a real 20-byte address to own
+ * the item, and inventory reads it back by that same address.
+ */
+export function ensureAddress(): string {
+  if (state.address) return state.address;
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  const address =
+    "0x" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  commit({ ...state, address });
+  return address;
+}
+
 export function disconnect() {
   commit({ ...state, address: null });
 }
@@ -158,6 +172,87 @@ export function recordForge(
   });
 
   return full;
+}
+
+/**
+ * Cache an item that was forged ON-CHAIN, keeping its real registry id.
+ *
+ * The chain path returns a full Item whose itemId is the registry's id — the same
+ * id request_translation reads by — so it must be preserved verbatim, not
+ * reassigned from the local sequence. This dedupes on that id, so re-reading the
+ * chain does not create duplicates.
+ */
+export function recordChainForge(item: Item, consensus: Consensus): Item {
+  const at = Date.now();
+
+  const entry: ProvenanceEntry = {
+    kind: "forged",
+    game: item.originGame,
+    name: item.canonicalName,
+    powerTier: item.powerTier,
+    note: `${consensus.agreedCount} of ${consensus.totalCount} validators agreed on-chain that the item was fairly balanced for the event.`,
+    at,
+  };
+
+  const logged: ActivityEntry = {
+    kind: "forged",
+    itemId: item.itemId,
+    owner: item.owner,
+    game: item.originGame,
+    name: item.canonicalName,
+    rarity: item.rarity,
+    powerTier: item.powerTier,
+    at,
+  };
+
+  commit({
+    ...state,
+    items: [...state.items.filter((i) => i.itemId !== item.itemId), item],
+    nextId: Math.max(state.nextId, item.itemId + 1),
+    provenance: { ...state.provenance, [item.itemId]: [entry] },
+    activity: [logged, ...state.activity].slice(0, 40),
+  });
+
+  return item;
+}
+
+/**
+ * Merge items read from the chain into the local cache, keyed by their real id.
+ *
+ * Items forged on-chain in this session are already cached; this catches anything
+ * else the registry holds for the owner (e.g. forged on another device). Existing
+ * entries win on nothing but presence — the chain is the source of truth, so its
+ * version replaces the cached one, but provenance already recorded locally is kept.
+ */
+export function mergeChainItems(chainItems: Item[]) {
+  if (chainItems.length === 0) return;
+  const byId = new Map(state.items.map((i) => [i.itemId, i]));
+  for (const item of chainItems) byId.set(item.itemId, item);
+
+  const provenance = { ...state.provenance };
+  let nextId = state.nextId;
+  for (const item of chainItems) {
+    nextId = Math.max(nextId, item.itemId + 1);
+    if (!provenance[item.itemId]) {
+      provenance[item.itemId] = [
+        {
+          kind: "forged",
+          game: item.originGame,
+          name: item.canonicalName,
+          powerTier: item.powerTier,
+          note: "Read from the on-chain registry.",
+          at: Date.now(),
+        },
+      ];
+    }
+  }
+
+  commit({
+    ...state,
+    items: Array.from(byId.values()).sort((a, b) => a.itemId - b.itemId),
+    provenance,
+    nextId,
+  });
 }
 
 export function recordTranslation(translation: Translation, consensus: Consensus) {
@@ -267,5 +362,5 @@ export function playableIn(s: State, game: GameId) {
   return { native, imported };
 }
 
-export { CHAIN_MODE };
+export { CHAIN_MODE, CONTRACTS_DEPLOYED };
 export type { State };

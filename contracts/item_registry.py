@@ -2,10 +2,16 @@
 """
 ItemRegistry - the universal source of truth for Driftt.
 
-Deliberately deterministic. This contract holds no LLM logic: it is the ledger
-that the three Intelligent Contracts (ItemForge, TranslationEngine,
-EvolutionTracker) write into once their non-deterministic output has survived
-Optimistic Democracy.
+The ledger AND the forge. It stores every item game-agnostically, and it runs the
+LLM that forges new items from gameplay events under Optimistic Democracy.
+
+Forging lives here, in the same contract as the storage it writes to, on purpose.
+The original design had a separate ItemForge that *emitted* mint_item across
+contracts — but on the deployed testnet an emitted cross-contract message is only
+dispatched at finalization, and finalization is not currently triggerable there,
+so the forged item never landed. A write to a contract's OWN storage, by contrast,
+persists the moment the transaction is accepted. Keeping the forge and the store
+in one contract is what makes an on-chain forge actually complete on this network.
 
 An item is stored game-agnostically. The `semantic_descriptor` - a rich natural
 language description of what the item *is* - is the thing that travels between
@@ -17,6 +23,21 @@ from genlayer import *
 
 from dataclasses import dataclass
 import json
+
+
+# The forge's honest constraint. Validators judge each other's independently-run
+# LLM output against this under the Equivalence Principle — semantic equivalence,
+# never byte equality — which is what stops a rogue node from forging an
+# overpowered item into the economy.
+FORGE_PRINCIPLE = """Both outputs describe a game item generated from the same event.
+They are equivalent if ALL of the following hold:
+1. `power_tier` values differ by no more than 8 points.
+2. `rarity` is the same, or one step apart on common < rare < epic < legendary.
+3. The items share the same broad archetype (both a weapon, both armour, both a
+   relic) and the same elemental/thematic flavour.
+Wording, names, and prose may differ freely - do not compare them literally.
+An output whose power_tier is not justified by the difficulty of the event is
+NOT equivalent, even if the other fields match."""
 
 
 @allow_storage
@@ -98,8 +119,7 @@ class ItemRegistry(gl.Contract):
 
     # ------------------------------------------------------------------ mutate
 
-    @gl.public.write
-    def mint_item(
+    def _store_item(
         self,
         owner: Address,
         origin_game: str,
@@ -110,12 +130,8 @@ class ItemRegistry(gl.Contract):
         lore: str,
         artwork_uri: str,
         forge_justification: str,
-    ) -> None:
-        """Called by ItemForge once validators have agreed on the generated item."""
-        self._require_authorized()
-        assert origin_game in self.rulesets, "registry: unknown origin game"
-        assert 1 <= power_tier <= 100, "registry: power_tier out of range"
-
+    ) -> int:
+        """Write an item into storage and return its id. Shared by mint_item and forge_item."""
         item_id = self.item_count
         self.item_count = item_id + 1
 
@@ -156,6 +172,117 @@ class ItemRegistry(gl.Contract):
                     "power_tier": power_tier,
                 }
             )
+        )
+        return item_id
+
+    @gl.public.write
+    def mint_item(
+        self,
+        owner: Address,
+        origin_game: str,
+        canonical_name: str,
+        semantic_descriptor: str,
+        power_tier: int,
+        rarity: str,
+        lore: str,
+        artwork_uri: str,
+        forge_justification: str,
+    ) -> None:
+        """Deterministic mint of a pre-decided item. Admin / authorized only."""
+        self._require_authorized()
+        assert origin_game in self.rulesets, "registry: unknown origin game"
+        assert 1 <= power_tier <= 100, "registry: power_tier out of range"
+        self._store_item(
+            owner,
+            origin_game,
+            canonical_name,
+            semantic_descriptor,
+            power_tier,
+            rarity,
+            lore,
+            artwork_uri,
+            forge_justification,
+        )
+
+    @gl.public.write
+    def forge_item(self, game_id: str, event_context: str, player: Address) -> None:
+        """
+        [INTELLIGENT METHOD]
+
+        Forge a new item from a gameplay event, and store it — in one transaction.
+
+        The non-determinism runs under Optimistic Democracy: a leader validator
+        runs the prompt, every other validator independently re-runs it, and they
+        must agree the design is equivalent under FORGE_PRINCIPLE before anything
+        is written. Because the write is to this contract's OWN storage, the item
+        lands the moment the transaction is accepted — no cross-contract emit, no
+        finalization dependency.
+
+        `player` is passed explicitly (rather than taken from the caller) so the
+        item is owned by the player even when a server relays the transaction on
+        their behalf.
+        """
+        assert game_id in self.rulesets, "forge: unknown game"
+        assert len(event_context) > 10, "forge: event_context too thin"
+
+        ruleset = self.rulesets[game_id]
+
+        prompt = f"""You are a game item designer working inside a live economy.
+
+A player triggered this event:
+{event_context}
+
+The game '{game_id}' has this ruleset:
+{ruleset}
+
+Design one item that this event should award. Rules you must obey:
+- power_tier is an integer from 1 to 100 and MUST be justified by the difficulty
+  of the event. A trivial event yields a low tier. Only a genuinely hard,
+  high-risk event may exceed 80.
+- rarity must be one of: common, rare, epic, legendary.
+- semantic_descriptor describes what the item IS in game-agnostic language: its
+  archetype, how it is wielded, its element, its weight and feel, its power
+  relative to the world. It must contain NO numeric stats and NO stat names from
+  this game, because other games translate the item from this description alone.
+- lore is 1-3 sentences that travel with the item forever.
+- balance_justification: one sentence on why this tier is fair for this event.
+
+Reply with ONLY valid JSON, no prose, no markdown fences:
+{{"canonical_name": str, "semantic_descriptor": str, "power_tier": int,
+  "rarity": str, "lore": str, "artwork_prompt": str,
+  "balance_justification": str}}"""
+
+        def design_item() -> str:
+            raw = gl.nondet.exec_prompt(prompt)
+            return _extract_json(raw)
+
+        # Non-deterministic. Validators re-run it and compare semantically.
+        result = gl.eq_principle.prompt_comparative(design_item, principle=FORGE_PRINCIPLE)
+
+        item = json.loads(result)
+
+        # Read every field with .get() and coerce defensively. The LLM output is
+        # non-deterministic, so a run that omits a key or returns an odd type must
+        # NOT throw and discard a whole consensus round — normalize instead. Power
+        # is clamped to range and rarity is derived from the power band (the model's
+        # rarity label is advisory). Only unparseable JSON is allowed to fail.
+        try:
+            raw_power = int(item.get("power_tier", 40))
+        except (ValueError, TypeError):
+            raw_power = 40
+        power = max(1, min(100, raw_power))
+        rarity = _rarity_for(power)
+
+        self._store_item(
+            player,
+            game_id,
+            str(item.get("canonical_name", "Forged Relic")),
+            str(item.get("semantic_descriptor", "An item won in battle.")),
+            power,
+            rarity,
+            str(item.get("lore", "")),
+            _artwork_uri(str(item.get("artwork_prompt", "a forged relic"))),
+            str(item.get("balance_justification", "")),
         )
 
     @gl.public.write
@@ -264,3 +391,35 @@ class ItemRegistry(gl.Contract):
             "lore": item.lore,
             "artwork_uri": item.artwork_uri,
         }
+
+
+# ---------------------------------------------------------------- forge helpers
+
+
+def _extract_json(raw: str) -> str:
+    """LLMs fence JSON even when told not to. Strip it, then take the outermost object."""
+    fence = "``" + "`"
+    text = raw.replace(fence + "json", "").replace(fence, "").strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    assert start != -1 and end > start, "forge: model did not return a JSON object"
+    return text[start : end + 1]
+
+
+def _rarity_for(power: int) -> str:
+    if power <= 30:
+        return "common"
+    if power <= 55:
+        return "rare"
+    if power <= 80:
+        return "epic"
+    return "legendary"
+
+
+def _artwork_uri(artwork_prompt: str) -> str:
+    """
+    Artwork is generated off-chain from this prompt and pinned to IPFS; the
+    resolver watches the forge log and backfills the CID. Until it does, the
+    prompt itself is the URI, so the art pipeline can never block a forge.
+    """
+    return "art:prompt/" + artwork_prompt
