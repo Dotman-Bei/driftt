@@ -23,7 +23,7 @@ decided by decentralized validator consensus rather than a trusted server.
 - [Architecture](#architecture)
 - [Deployment & what is verified on-chain](#deployment)
 - [Quick start](#quick-start)
-- [How the app settles: on-chain vs simulated](#how-the-app-settles)
+- [How the app settles: strictly on-chain](#how-the-app-settles)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
 - [Engineering notes](#engineering-notes)
@@ -134,33 +134,32 @@ invariant.
 
 ## Architecture
 
-Four Intelligent Contracts, written in Python and deployed on GenLayer. The registry is the
-single source of truth; the forge lives inside it so a forged item is designed *and* stored in
-one transaction.
+Two active Intelligent Contracts, written in Python and deployed on GenLayer. The registry is
+the single source of truth, and the two intelligent methods that *write* items — `forge_item`
+and `evolve_item` — live inside it, so each one designs (or grows) an item and stores it in the
+same transaction. Only translation, which writes to its own storage, is a separate contract.
 
 ```
-                 ┌──────────────────────────────────────────────────┐
-                 │  ItemRegistry           [ ledger + forge ]        │
-                 │  · forge_item()   [INTELLIGENT]  event → item     │
-                 │  · items · rulesets · provenance · ownership      │
-                 └───────▲──────────────────────────────▲───────────┘
-              reads item │                               │ apply_evolution()
-              + ruleset  │                               │ append_history()
-              ┌──────────┴───────────────┐   ┌───────────┴──────────────┐
-              │  TranslationEngine        │   │  EvolutionTracker         │
-              │  request_translation()    │   │  evolve_item()            │
-              │  [INTELLIGENT]            │   │  [INTELLIGENT]            │
-              │  item → target ruleset    │   │  usage → bounded growth   │
-              └───────────────────────────┘   └───────────────────────────┘
+        ┌────────────────────────────────────────────────────────────────┐
+        │  ItemRegistry                        [ ledger + forge + evolve ]│
+        │  · forge_item()   [INTELLIGENT]  gameplay event → new item      │
+        │  · evolve_item()  [INTELLIGENT]  usage event → bounded growth    │
+        │  · items · rulesets · provenance · ownership                    │
+        └───────────────────────────────▲────────────────────────────────┘
+                     reads item + ruleset │
+                          ┌───────────────┴───────────────┐
+                          │  TranslationEngine             │
+                          │  request_translation()  [INTELLIGENT]
+                          │  item → the target game's ruleset
+                          └────────────────────────────────┘
                     every intelligent call is settled by Optimistic Democracy
 ```
 
 | Contract | Role |
 |---|---|
-| [`item_registry.py`](contracts/item_registry.py) | **Ledger + forge.** `forge_item` is an *intelligent* method: it reads the game's ruleset, has the LLM design a balanced item from a gameplay event, and — after validators agree — stores the item in the registry's own storage, all in one transaction. Also holds rulesets, append-only provenance, and ownership. |
-| [`translation_engine.py`](contracts/translation_engine.py) | **Intelligent.** `request_translation` rebalances an item into another game's ruleset, enforcing the balance invariant by consensus and clamp. |
-| [`evolution_tracker.py`](contracts/evolution_tracker.py) | **Intelligent.** `evolve_item` grows an item through use, with a hard, diminishing anti-farming ceiling. |
-| [`item_forge.py`](contracts/item_forge.py) | The original standalone forge, superseded by the merged registry forge above. Kept for reference. |
+| [`item_registry.py`](contracts/item_registry.py) | **Ledger + forge + evolve.** `forge_item` designs a balanced item from a gameplay event; `evolve_item` grows an item through use with a diminishing anti-farming ceiling. Both are *intelligent* (LLM + consensus) and write to the registry's own storage, so the result lands at consensus. Also holds rulesets, append-only provenance, and ownership. |
+| [`translation_engine.py`](contracts/translation_engine.py) | **Intelligent.** `request_translation` rebalances an item into another game's ruleset, enforcing the balance invariant by consensus and a deterministic clamp. |
+| [`item_forge.py`](contracts/item_forge.py), [`evolution_tracker.py`](contracts/evolution_tracker.py) | The original standalone forge and evolution contracts, superseded by the merged registry methods above. Kept for reference. |
 
 **Adding a game requires no code.** A game is registered by describing its ruleset in plain
 English:
@@ -182,10 +181,10 @@ makes the games playable on-chain.
 
 | Contract | Studio address |
 |---|---|
-| `ItemRegistry` (forge + ledger) | `0xcE8B4E4Ee51Bb2785d5F8E49a64A41006Ca6202b` |
-| `ItemForge` | `0x6C250C91B06dF6A11a6FBA17010b5c59EA441c38` |
-| `TranslationEngine` | `0xF481004d37134d8c345C5A1B940d524bA13bE536` |
-| `EvolutionTracker` | `0xB63A4C8a83c0B4a00EfC776c8C9E570cBC329FD3` |
+| `ItemRegistry` (forge + ledger) | `0xD80f0437ea315638505F93497CC3fFBa77cCCFE4` |
+| `ItemForge` | `0xe00232295c6Ed6f454f9B3A9008069d00d19B9Ba` |
+| `TranslationEngine` | `0x76b278Ee0274Ac56F9075C4B6C7D6Bc0DC32FA2B` |
+| `EvolutionTracker` | `0xc7c9B5ad514c9911F1c60b39f3D2dec5E27c5B1A` |
 
 > GenLayer Studio is a shared sandbox that resets periodically; when it does, the app is
 > redeployed and these addresses change. The current live set is always recorded in
@@ -254,28 +253,32 @@ setting the values in `web/.env.local` (written for you by the deploy script) pl
 
 ## How the app settles
 
-Gameplay (moving, fighting) is always instant and local. What varies is where the two
-**deliberate moments** — forging on a kill, translating into another game — are settled.
+Gameplay (moving, fighting) is always instant and local. What varies is where the three
+**deliberate moments** — forging on a kill, translating into another game, evolving through use
+— are settled.
 
-**On-chain (default, contracts configured).** The `/api/forge` and `/api/translate` routes
-submit real transactions to the deployed Intelligent Contracts, server-side. The browser needs
-no wallet: the server relays and pays gas, and the player's address is passed through so the
-item is still owned by the player. Each of these moments runs the LLM on every validator and
-waits for agreement, so it takes tens of seconds to a couple of minutes and shows a "forging on
-GenLayer" state; the returned consensus data is real, and the inventory reads items straight
-from the on-chain registry.
+**On-chain and strict (contracts configured).** The `/api/forge`, `/api/translate`, and
+`/api/evolve` routes submit real transactions to the deployed Intelligent Contracts,
+server-side. The browser needs no wallet: the server relays and pays gas, and the player's
+address is passed through so the item is still owned by the player. Each of these runs the LLM
+on every validator and waits for agreement, so it takes tens of seconds to a couple of minutes
+and shows a "forging on GenLayer" state; the returned consensus data is real, and the inventory
+reads items straight from the on-chain registry. On success, the result displays **"Settled on
+GenLayer ✓"** with its transaction id.
 
-**Graceful fallback.** Studio is a shared sandbox — it can be slow or reset. If an on-chain call
-does not commit within a bounded time budget, the routes fall back to the local consensus
-engine so a player is **never dead-ended**. The response reports which path produced the item,
-so the UI never misrepresents where consensus ran.
+**There is deliberately no simulation fallback.** If an on-chain call fails — a Studio reset, a
+stall past the time budget, an RPC error — the route returns an error the player sees and can
+retry, rather than a locally-computed result quietly presented as on-chain. The app is on-chain
+or it is honest about failing; it never fakes it.
 
-**Simulated (no key).** With no deployer key, the same leader / validator / equivalence-principle
-/ appeal machinery in [`web/src/lib/oracle.ts`](web/src/lib/oracle.ts) executes in the browser —
-instant, free, and identical in shape to the on-chain result. Without an `ANTHROPIC_API_KEY`,
-each validator runs an independently-seeded offline generator instead of an LLM (so they still
-produce different results and the Equivalence Principle still does real work). Add a key to run
-genuine LLM reasoning locally:
+**Local mode (no deployment).** If no contracts are configured at all, the same leader /
+validator / equivalence-principle / appeal machinery in
+[`web/src/lib/oracle.ts`](web/src/lib/oracle.ts) runs in-browser so the project is still
+explorable without a deployment. This is a distinct, clearly-labeled mode — not a fallback that
+can mask a chain outage. Without an `ANTHROPIC_API_KEY`, each validator runs an
+independently-seeded offline generator instead of an LLM (so they still produce different
+results and the Equivalence Principle still does real work). Add a key to run genuine LLM
+reasoning locally:
 
 ```bash
 echo "ANTHROPIC_API_KEY=sk-ant-..." >> web/.env.local
@@ -290,7 +293,7 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." >> web/.env.local
 | Intelligent Contracts | Python on GenLayer (`gl.nondet.exec_prompt`, `gl.eq_principle.prompt_comparative`, `TreeMap` / `DynArray` / `u256` storage, cross-contract `get_contract_at`) |
 | Chain SDK | [`genlayer-js`](https://www.npmjs.com/package/genlayer-js) (viem-based) |
 | Frontend | Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 |
-| LLM | Anthropic Claude (`claude-opus-4-8`) via the official SDK, used both on-chain (validators) and in the local fallback |
+| LLM | Anthropic Claude (`claude-opus-4-8`) via the official SDK, used both on-chain (validators) and in local mode |
 | Games | Hand-written HTML canvas — no game engine dependency |
 
 ---
@@ -365,7 +368,7 @@ with a dedicated mobile navigation.
 ## Status & roadmap
 
 **Working today:** four contracts deployed on GenLayer (Studio + public testnet); the full
-forge → translate → evolve loop on-chain through the app, with a graceful local fallback; two
+forge → translate → evolve loop on-chain through the app (strict — no simulation fallback); two
 playable games; on-chain inventory and provenance; a responsive UI.
 
 **Verified clean:** `npm run build`, `tsc --noEmit`, and `eslint` all pass.

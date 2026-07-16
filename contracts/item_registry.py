@@ -40,6 +40,24 @@ An output whose power_tier is not justified by the difficulty of the event is
 NOT equivalent, even if the other fields match."""
 
 
+# Evolution grows an item through use, but stingily — the exploit is farming
+# trivial events to inflate an item until it breaks every game it touches. The
+# gain is capped by both the equivalence principle the validators judge against
+# and a deterministic clamp after consensus.
+MAX_GAIN_PER_EVOLUTION = 6
+EVOLUTION_PRINCIPLE = """Both outputs describe how the same item evolved after the same event.
+They are equivalent if ALL of the following hold:
+1. `power_gain` values differ by no more than 3, and neither exceeds 6.
+2. Both agree on whether the item's rarity increased (`rarity_upgraded` matches).
+3. Both describe the same kind of change to the item - the same physical or
+   thematic development, even if worded differently.
+The prose of `lore_chapter` and `evolution_summary` may differ freely.
+An output that awards a large power gain for a trivial or repetitive event is NOT
+equivalent to one that correctly awards little or nothing."""
+
+_RARITY_LADDER = ["common", "rare", "epic", "legendary"]
+
+
 @allow_storage
 @dataclass
 class Item:
@@ -75,9 +93,14 @@ class ItemRegistry(gl.Contract):
     # Append-only public log, read by the ForgeFeed UI
     activity: DynArray[str]
 
+    # item_id -> how many times it has evolved (drives diminishing returns)
+    evolutions: TreeMap[u256, u256]
+    evolution_count: u256
+
     def __init__(self) -> None:
         self.admin = gl.message.sender_address
         self.item_count = 0
+        self.evolution_count = 0
 
     # ---------------------------------------------------------------- internal
 
@@ -314,6 +337,127 @@ Reply with ONLY valid JSON, no prose, no markdown fences:
         item.lore = item.lore + "\n\n" + lore_chapter
 
     @gl.public.write
+    def evolve_item(self, item_id: int, usage_event: str) -> None:
+        """
+        [INTELLIGENT METHOD]
+
+        Grow an item through use. Like forge_item, this runs the LLM and writes to
+        this contract's OWN storage in the same transaction, so the evolution lands
+        at consensus rather than depending on cross-contract finalization.
+
+        Growth is deliberately stingy and diminishing: the ceiling shrinks each time
+        an item evolves, so an item cannot be farmed into a god-weapon — enforced by
+        the equivalence principle AND a deterministic clamp after consensus.
+        """
+        assert len(usage_event) > 10, "evolve: usage_event too thin"
+        assert item_id in self.items, "registry: unknown item"
+
+        item = self.items[item_id]
+        current_power = int(item.power_tier)
+        current_rarity = str(item.rarity).strip().lower()
+        times_evolved = int(self.evolutions.get(u256(item_id), 0))
+        headroom = max(0, MAX_GAIN_PER_EVOLUTION - times_evolved)
+
+        prompt = f"""You are the chronicler of a persistent game item. Decide how this item
+changed as a result of how it was used.
+
+ITEM: {item.canonical_name}
+WHAT IT IS: {item.semantic_descriptor}
+CURRENT POWER TIER: {current_power}/100
+CURRENT RARITY: {current_rarity}
+LORE SO FAR: {item.lore}
+TIMES ALREADY EVOLVED: {times_evolved}
+
+THE EVENT:
+{usage_event}
+
+Hard constraints:
+- `power_gain` is an integer from 0 to {headroom}. Most events deserve 0, 1 or 2.
+  Award the maximum only for a genuinely extraordinary, hard-won event. A grindy
+  or repetitive event deserves 0 - items must not be farmable into god-tier. This
+  item has already evolved {times_evolved} time(s), so it has earned less headroom.
+- `rarity_upgraded` is true ONLY if the gain pushes the item across a real
+  threshold (common 1-30, rare 31-55, epic 56-80, legendary 81-100). Otherwise false.
+- `lore_chapter` is 1-2 sentences added to the item's story, referencing this
+  specific event. It must read as a continuation, not a restatement.
+- `evolution_summary` is a terse machine-voiced line describing the physical or
+  thematic change, e.g. "Edge re-tempered by sustained plasma discharge."
+
+Reply with ONLY valid JSON, no prose, no markdown fences:
+{{"power_gain": int, "rarity_upgraded": bool, "lore_chapter": str,
+  "evolution_summary": str}}"""
+
+        def decide_evolution() -> str:
+            raw = gl.nondet.exec_prompt(prompt)
+            return _extract_json(raw)
+
+        result = gl.eq_principle.prompt_comparative(
+            decide_evolution, principle=EVOLUTION_PRINCIPLE
+        )
+        parsed = json.loads(result)
+
+        # Normalize defensively — the LLM output is non-deterministic, so a missing
+        # or odd field must not throw and discard a consensus round.
+        try:
+            raw_gain = int(parsed.get("power_gain", 0))
+        except (ValueError, TypeError):
+            raw_gain = 0
+
+        # Clamp after consensus. Even a unanimous validator set cannot inflate an
+        # item past the protocol's own ceiling.
+        gain = max(0, min(raw_gain, headroom))
+        new_power = min(100, current_power + gain)
+        new_rarity = _rarity_for(new_power) if bool(parsed.get("rarity_upgraded", False)) else current_rarity
+
+        # Rarity may never fall, and may never outrun the item's actual power.
+        if _RARITY_LADDER.index(new_rarity) < _RARITY_LADDER.index(current_rarity):
+            new_rarity = current_rarity
+        if _RARITY_LADDER.index(new_rarity) > _RARITY_LADDER.index(_rarity_for(new_power)):
+            new_rarity = _rarity_for(new_power)
+
+        lore_chapter = str(parsed.get("lore_chapter", ""))
+        summary = str(parsed.get("evolution_summary", "Evolved through use."))
+
+        # Write in place — the whole point of the merge.
+        item.power_tier = u256(new_power)
+        item.rarity = new_rarity
+        if lore_chapter:
+            item.lore = item.lore + "\n\n" + lore_chapter
+
+        # The history entry carries everything the UI needs to render the result,
+        # so no separate return value or cross-contract read is required.
+        self.history.get_or_insert_default(item_id).append(
+            json.dumps(
+                {
+                    "kind": "evolved",
+                    "game": item.origin_game,
+                    "power_tier": new_power,
+                    "power_gain": gain,
+                    "rarity": new_rarity,
+                    "name": summary,
+                    "lore_chapter": lore_chapter,
+                    "note": usage_event,
+                }
+            )
+        )
+        self._log(
+            json.dumps(
+                {
+                    "kind": "evolved",
+                    "item_id": item_id,
+                    "owner": item.owner.as_hex,
+                    "game": item.origin_game,
+                    "name": summary,
+                    "rarity": new_rarity,
+                    "power_tier": new_power,
+                }
+            )
+        )
+
+        self.evolutions[u256(item_id)] = u256(times_evolved + 1)
+        self.evolution_count = self.evolution_count + 1
+
+    @gl.public.write
     def transfer_item(self, item_id: int, to: Address) -> None:
         """Plain ownership transfer. Only the current holder may move an item."""
         assert item_id in self.items, "registry: unknown item"
@@ -371,6 +515,10 @@ Reply with ONLY valid JSON, no prose, no markdown fences:
     @gl.public.view
     def get_item_count(self) -> int:
         return int(self.item_count)
+
+    @gl.public.view
+    def get_times_evolved(self, item_id: int) -> int:
+        return int(self.evolutions.get(u256(item_id), 0))
 
     @gl.public.view
     def get_activity(self, limit: int) -> str:

@@ -25,6 +25,8 @@ export function ItemDetail({ itemId }: { itemId: number }) {
   const [usageEvent, setUsageEvent] = useState("");
   const [evolving, setEvolving] = useState(false);
   const [consensus, setConsensus] = useState<Consensus | null>(null);
+  const [onChain, setOnChain] = useState(false);
+  const [txId, setTxId] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
 
   if (!item) {
@@ -58,9 +60,15 @@ export function ItemDetail({ itemId }: { itemId: number }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item, usageEvent, timesEvolved }),
       });
-      const data = (await res.json()) as EvolveResult & { error?: string };
+      const data = (await res.json()) as EvolveResult & {
+        error?: string;
+        usingChain?: boolean;
+        txId?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? "evolution failed");
 
+      setOnChain(Boolean(data.usingChain));
+      setTxId(data.txId);
       setConsensus(data.consensus);
       if (data.consensus.approved) {
         recordEvolution(item, data, usageEvent);
@@ -190,7 +198,7 @@ export function ItemDetail({ itemId }: { itemId: number }) {
 
           {consensus && !evolving && (
             <div className="mt-12">
-              <ConsensusResult consensus={consensus} />
+              <ConsensusResult consensus={consensus} onChain={onChain} txId={txId} />
             </div>
           )}
         </div>

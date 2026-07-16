@@ -3,7 +3,14 @@ import "server-only";
 import { createAccount, createClient } from "genlayer-js";
 import { testnetBradbury, localnet, studionet } from "genlayer-js/chains";
 import { CalldataAddress } from "genlayer-js/types";
-import type { Consensus, GameId, Item, Rarity, Translation } from "./types";
+import type {
+  Consensus,
+  EvolveResult,
+  GameId,
+  Item,
+  Rarity,
+  Translation,
+} from "./types";
 import { rarityForPower } from "./types";
 
 // Read the addresses from the environment directly rather than importing them
@@ -341,6 +348,53 @@ export async function translateOnChain(
   return {
     translation,
     consensus: consensusFrom(receipt, BALANCE_PRINCIPLE, translation.powerTier),
+    txId: txIdOf(receipt),
+  };
+}
+
+/* ------------------------------------------------------------------- evolve */
+
+const EVOLUTION_PRINCIPLE =
+  "power_gain within 3 of the leader and never above the cap; the same rarity-upgrade decision; " +
+  "the same kind of change. A large gain for a trivial or repetitive event is not equivalent.";
+
+interface EvolvedHistoryEntry {
+  kind: string;
+  power_tier: number;
+  power_gain: number;
+  rarity: Rarity;
+  name: string;
+  lore_chapter?: string;
+}
+
+export async function evolveOnChain(
+  item: Item,
+  usageEvent: string,
+): Promise<EvolveResult & { txId?: string }> {
+  const { client: c } = client();
+
+  // evolve_item lives on the registry (merged, like forge_item), so the growth is
+  // written in place and lands at consensus. It records everything the UI needs in
+  // the item's history, so we read that back rather than diffing item state.
+  const receipt = await send(c, ADDRESSES.registry, "evolve_item", [
+    item.itemId,
+    usageEvent,
+  ]);
+
+  const history = JSON.parse(
+    (await read(c, ADDRESSES.registry, "get_history", [item.itemId])) as string,
+  ) as EvolvedHistoryEntry[];
+
+  const last = [...history].reverse().find((h) => h.kind === "evolved");
+  if (!last) throw new Error("evolution reached consensus but no history entry was written");
+
+  return {
+    powerGain: last.power_gain,
+    newPowerTier: last.power_tier,
+    newRarity: last.rarity,
+    loreChapter: last.lore_chapter ?? "",
+    evolutionSummary: last.name,
+    consensus: consensusFrom(receipt, EVOLUTION_PRINCIPLE, last.power_tier),
     txId: txIdOf(receipt),
   };
 }

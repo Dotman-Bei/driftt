@@ -62,10 +62,17 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const WAIT = { status: TransactionStatus.ACCEPTED, interval: 4000, retries: 180 };
 
-/** A transport hiccup, as opposed to the chain actually rejecting something. */
+/**
+ * A transient hiccup — a transport failure or a busy sandbox — as opposed to the
+ * chain actually rejecting something. Studio is shared and rejects with a "Server
+ * busy: all N execution slots occupied" (-32006) under load; that is a retry, not
+ * a failure.
+ */
 function isNetworkBlip(err) {
-  const s = `${err?.message ?? ""} ${err?.details ?? ""} ${err?.cause?.message ?? ""}`;
-  return /fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|SSL|EAI_AGAIN|network/i.test(s);
+  const s = `${err?.message ?? ""} ${err?.details ?? ""} ${err?.cause?.message ?? ""} ${err?.cause?.code ?? ""}`;
+  return /fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|SSL|EAI_AGAIN|network|Server busy|execution slots|-32006|retry later/i.test(
+    s,
+  );
 }
 
 /**
@@ -209,7 +216,18 @@ export async function deployContract(client, file, args, attempts = 4) {
   }
 }
 
-/** A view call. Proves the contract exists — a dead address throws "contract not found". */
-export function read(client, address, functionName, args = []) {
-  return client.readContract({ address, functionName, args });
+/**
+ * A view call. Proves the contract exists — a dead address throws "contract not
+ * found". Retries transient hiccups (transport blips, a busy Studio sandbox) so a
+ * momentary -32006 does not crash a deploy mid-flight.
+ */
+export async function read(client, address, functionName, args = [], attempts = 6) {
+  for (let i = 1; ; i++) {
+    try {
+      return await client.readContract({ address, functionName, args });
+    } catch (err) {
+      if (!isNetworkBlip(err) || i >= attempts) throw err;
+      await sleep(3000);
+    }
+  }
 }
