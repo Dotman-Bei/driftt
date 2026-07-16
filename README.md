@@ -128,10 +128,15 @@ minute, with no gas and no flakiness. This is what makes the games actually play
 
 | Contract | Studio address |
 |---|---|
-| `ItemRegistry` (forge + ledger) | `0x7A1BBd8eDc7850630C56a9Fc5A32dFc35a93976F` |
-| `ItemForge` | `0xEa4C7332a37A2D024F0202F055dc7414B66e7e69` |
-| `TranslationEngine` | `0x75468f7175eEF9D2e94Be67e2CF939c33871bC2C` |
-| `EvolutionTracker` | `0x2f2d4c2344F6FE65305E98A02eFacc1AA900B025` |
+| `ItemRegistry` (forge + ledger) | `0xcE8B4E4Ee51Bb2785d5F8E49a64A41006Ca6202b` |
+| `ItemForge` | `0x6C250C91B06dF6A11a6FBA17010b5c59EA441c38` |
+| `TranslationEngine` | `0xF481004d37134d8c345C5A1B940d524bA13bE536` |
+| `EvolutionTracker` | `0xB63A4C8a83c0B4a00EfC776c8C9E570cBC329FD3` |
+
+> Studio is a shared sandbox that resets periodically; when it does, the app is
+> redeployed and these addresses change. The current live set is always in
+> [`contracts/deployments.json`](contracts/deployments.json). The testnet set below
+> does not rotate, so it is the durable reference.
 
 The contracts were also deployed to and proven on the **public Bradbury testnet** (chain id
 `4221`, `https://rpc-bradbury.genlayer.com`) — a real forge there reached `6 of 6` validator
