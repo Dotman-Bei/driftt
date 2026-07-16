@@ -18,7 +18,7 @@ export function Section({
   return (
     <section
       id={id}
-      className={`py-28 px-6 border-t border-[#303030] ${className}`}
+      className={`py-16 sm:py-20 md:py-28 px-5 sm:px-6 border-t border-[#303030] ${className}`}
     >
       <div className="max-w-6xl mx-auto">{children}</div>
     </section>
@@ -42,7 +42,7 @@ export function Headline({
 }) {
   return (
     <h2
-      className={`text-4xl md:text-5xl font-bold text-[#F5F5F5] tracking-tight leading-tight mb-6 ${className}`}
+      className={`text-3xl sm:text-4xl md:text-5xl font-bold text-[#F5F5F5] tracking-tight leading-tight mb-6 ${className}`}
     >
       {children}
     </h2>

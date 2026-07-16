@@ -98,7 +98,7 @@ export default function NovaDriftPage() {
             : "Nothing has drifted in yet. Forge something in Emberfall, translate it, and it will show up here as ordnance."}
         </p>
 
-        <div className="grid lg:grid-cols-[1fr_320px] gap-12 items-start">
+        <div className="grid lg:grid-cols-[1fr_320px] gap-8 lg:gap-12 items-start">
           <NovaDrift loadout={loadout} onVictory={onVictory} />
 
           <aside>

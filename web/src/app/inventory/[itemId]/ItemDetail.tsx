@@ -83,7 +83,7 @@ export function ItemDetail({ itemId }: { itemId: number }) {
           ← Inventory
         </Link>
 
-        <div className="grid md:grid-cols-[auto_1fr] gap-12 mt-12 items-start">
+        <div className="grid md:grid-cols-[auto_1fr] gap-8 md:gap-12 mt-10 md:mt-12 items-start">
           <ItemSigil item={item} size={180} />
 
           <div>
@@ -91,7 +91,7 @@ export function ItemDetail({ itemId }: { itemId: number }) {
               Forged in {GAME_NAMES[item.originGame]}
             </p>
 
-            <h1 className="text-4xl md:text-5xl font-bold text-[#F5F5F5] tracking-tight leading-tight mb-6">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#F5F5F5] tracking-tight leading-tight mb-6 break-words">
               {item.canonicalName}
             </h1>
 

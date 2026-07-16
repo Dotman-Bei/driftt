@@ -100,7 +100,7 @@ export default function EmberfallPage() {
           hand — the item is designed from what you actually did.
         </p>
 
-        <div className="grid lg:grid-cols-[1fr_320px] gap-12 items-start">
+        <div className="grid lg:grid-cols-[1fr_320px] gap-8 lg:gap-12 items-start">
           <Emberfall weapon={equipped} onVictory={onVictory} />
 
           <aside>

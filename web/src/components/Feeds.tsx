@@ -21,7 +21,7 @@ export function ForgeFeed({ activity }: { activity: ActivityEntry[] }) {
         <Link
           key={`${entry.itemId}-${entry.at}-${i}`}
           href={`/inventory/${entry.itemId}`}
-          className="flex items-baseline gap-4 py-4 border-b border-[#303030] font-mono text-sm transition-colors duration-200 hover:bg-[#141414]"
+          className="flex items-baseline gap-3 sm:gap-4 py-4 border-b border-[#303030] font-mono text-sm transition-colors duration-200 hover:bg-[#141414]"
         >
           <span className="text-[#606060] shrink-0 text-xs">
             {new Date(entry.at).toLocaleTimeString([], {
@@ -30,7 +30,9 @@ export function ForgeFeed({ activity }: { activity: ActivityEntry[] }) {
               second: "2-digit",
             })}
           </span>
-          <span className="text-[#606060] shrink-0 text-xs w-24 tracking-[0.15em] uppercase">
+          {/* The verb is repeated in the sentence, so on phones the column is
+              dropped to give the item name its room. */}
+          <span className="hidden sm:inline text-[#606060] shrink-0 text-xs w-24 tracking-[0.15em] uppercase">
             {entry.kind}
           </span>
           <span className="text-[#CACACA] min-w-0 truncate">
