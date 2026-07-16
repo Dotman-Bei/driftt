@@ -4,6 +4,30 @@ import Link from "next/link";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { Rarity } from "@/lib/types";
 
+/* ------------------------------------------------------------------- logo */
+
+/**
+ * The Driftt mark: brackets around a cobalt diamond — an item held between two
+ * worlds. Transparent background, so it sits on the page's dark surface directly.
+ * The cobalt diamond is the mark's identity, exempt from the page accent budget.
+ */
+export function DrifttLogo({ size = 28 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      role="img"
+      aria-label="Driftt"
+      className="shrink-0"
+    >
+      <path d="M18 13 H13 V35 H18" fill="none" stroke="#F5F5F5" strokeWidth="2.4" />
+      <path d="M30 13 H35 V35 H30" fill="none" stroke="#F5F5F5" strokeWidth="2.4" />
+      <polygon points="24,17.5 30.5,24 24,30.5 17.5,24" fill="#110FFF" />
+    </svg>
+  );
+}
+
 /* ---------------------------------------------------------------- section */
 
 export function Section({

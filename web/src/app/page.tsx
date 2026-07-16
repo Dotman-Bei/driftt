@@ -6,6 +6,7 @@ import heroVortex from "@/assets/hero-vortex.jpg";
 import { GAMES } from "@/lib/rulesets";
 import {
   ButtonLink,
+  DrifttLogo,
   Eyebrow,
   GenLayerMark,
   GlowWord,
@@ -315,9 +316,7 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-10 md:pt-12 border-t border-[#303030]">
-          <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#606060]">
-            Driftt
-          </p>
+          <DrifttLogo size={32} />
           <GenLayerMark showWordmark />
         </div>
       </Section>

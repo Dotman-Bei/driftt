@@ -22,7 +22,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Driftt — assets that drift freely between games",
+  // Browser-tab title beside the favicon — just the name.
+  title: "Driftt",
   description:
     "A cross-game asset layer where items are semantically translated between genuinely different games, and rebalanced by validator consensus. Built on GenLayer Intelligent Contracts.",
 };
