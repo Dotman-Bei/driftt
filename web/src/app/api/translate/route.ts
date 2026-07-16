@@ -27,11 +27,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // On chain, request_translation reads the item from the registry by id, so the
-    // item must have been forged on-chain (its itemId is the real registry id).
+    // On chain, request_translation reads the item from the registry by id, so it
+    // only works for items that were actually forged on-chain. If the item is not
+    // on-chain (it was forged in simulated mode) or the chain is unavailable (a
+    // Studio reset), fall back to the oracle so translation still works. usingChain
+    // reports which path ran.
     if (CHAIN_WRITES_ENABLED) {
-      const result = await translateOnChain(body.item, body.targetGame);
-      return NextResponse.json({ ...result, usingChain: true, usingLLM: true });
+      try {
+        const result = await translateOnChain(body.item, body.targetGame);
+        return NextResponse.json({ ...result, usingChain: true, usingLLM: true });
+      } catch (chainErr) {
+        console.warn("on-chain translate failed, falling back to local consensus:", chainErr);
+      }
     }
 
     const result = await translate(body.item, body.targetGame);

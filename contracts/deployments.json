@@ -4,9 +4,9 @@
   "rpc": "https://studio.genlayer.com/api",
   "deployer": "0x16DDf06474B3617e689E0a878B8B8919e5e5AbE1",
   "contracts": {
-    "ItemRegistry": "0x7A1BBd8eDc7850630C56a9Fc5A32dFc35a93976F",
-    "ItemForge": "0xEa4C7332a37A2D024F0202F055dc7414B66e7e69",
-    "TranslationEngine": "0x75468f7175eEF9D2e94Be67e2CF939c33871bC2C",
-    "EvolutionTracker": "0x2f2d4c2344F6FE65305E98A02eFacc1AA900B025"
+    "ItemRegistry": "0xcE8B4E4Ee51Bb2785d5F8E49a64A41006Ca6202b",
+    "ItemForge": "0x6C250C91B06dF6A11a6FBA17010b5c59EA441c38",
+    "TranslationEngine": "0xF481004d37134d8c345C5A1B940d524bA13bE536",
+    "EvolutionTracker": "0xB63A4C8a83c0B4a00EfC776c8C9E570cBC329FD3"
   }
 }

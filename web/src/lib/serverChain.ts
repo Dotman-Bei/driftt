@@ -111,14 +111,22 @@ const RETRYABLE = new Set([
  * Transport blips while polling are not a reason to resubmit; we re-poll the same
  * hash so the intelligent method never runs (or gets billed) twice.
  */
+// Overall wall-clock budget for landing a write on-chain. If the chain does not
+// produce a committed result within this window — Studio's latency is variable and
+// it can stall or reset — the whole thing is abandoned and the caller falls back to
+// instant local consensus. A healthy forge/translate lands well inside it; the point
+// is that a stuck chain never hangs the player for minutes.
+const CHAIN_BUDGET_MS = 150_000;
+
 async function send(
   c: ReturnType<typeof client>["client"],
   address: string,
   functionName: string,
   args: unknown[],
-  attempts = 6,
 ): Promise<GenReceipt> {
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  const overallDeadline = Date.now() + CHAIN_BUDGET_MS;
+
+  while (Date.now() < overallDeadline) {
     const hash = (await c.writeContract({
       address: address as Address,
       functionName,
@@ -128,11 +136,10 @@ async function send(
 
     // Poll for a decided status ourselves rather than waiting for ACCEPTED
     // specifically — an UNDETERMINED round never becomes ACCEPTED, and waiting on
-    // it would hang until the retry budget ran out.
+    // it would hang until the budget ran out.
     let receipt: GenReceipt | undefined;
-    const deadline = Date.now() + 6 * 60 * 1000;
-    while (Date.now() < deadline) {
-      await sleep(5000);
+    while (Date.now() < overallDeadline) {
+      await sleep(4000);
       try {
         const tx = (await c.getTransaction({ hash: hash as never })) as GenReceipt;
         const status = tx?.statusName ?? "";
@@ -147,13 +154,12 @@ async function send(
 
     const status = receipt?.statusName;
     if (!receipt || !status || RETRYABLE.has(status)) {
-      if (attempt === attempts) {
-        throw new Error(
-          `${functionName}: validators could not reach consensus after ${attempts} attempts (last: ${status ?? "no receipt"})`,
-        );
-      }
-      await sleep(8000);
-      continue; // resubmit — nothing was committed
+      // Nothing committed (undetermined / timed out / budget hit mid-poll). If
+      // there is budget left, resubmit for a fresh validator set; otherwise throw
+      // so the caller falls back to local consensus.
+      if (Date.now() >= overallDeadline) break;
+      await sleep(6000);
+      continue;
     }
 
     const exec = receipt.txExecutionResultName ?? receipt.txExecutionResult;
@@ -164,7 +170,7 @@ async function send(
     }
     return receipt;
   }
-  throw new Error(`${functionName}: exhausted retries`);
+  throw new Error(`${functionName}: no committed result within the on-chain time budget`);
 }
 
 async function read(
@@ -185,7 +191,16 @@ async function read(
  * AGREE/DISAGREE outcome, rather than an invented per-node story.
  */
 function consensusFrom(receipt: GenReceipt, principle: string, powerTier: number): Consensus {
-  const agreed = (receipt.resultName ?? receipt.result_name ?? "AGREE") === "AGREE";
+  // send() only returns a receipt that reached a committed state (ACCEPTED /
+  // FINALIZED) — an UNDETERMINED or timed-out round is retried or thrown before
+  // we get here — and the caller separately verifies the write actually landed on
+  // chain. So consensus succeeded by construction. We treat it as approved unless
+  // the receipt EXPLICITLY reports disagreement; the raw result field is not
+  // reliable across the testnet and Studio (Studio often omits or renames it, so
+  // trusting it would falsely report a successful forge as rejected — which would
+  // make the client discard a real, on-chain item).
+  const result = receipt.resultName ?? receipt.result_name;
+  const agreed = result !== "DISAGREE" && result !== "NO_MAJORITY";
   const validators = receipt.consumedValidators ?? receipt.consumed_validators ?? [];
   const total = Math.max(1, validators.length || 5);
   const tx = txIdOf(receipt) ?? "";

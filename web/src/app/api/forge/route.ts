@@ -35,13 +35,23 @@ export async function POST(request: Request) {
     // Real chain when a deployer key is configured; otherwise the local oracle.
     // The two return the same shape — the caller only needs `usingChain` to label
     // where consensus ran and (on chain) to keep the item's real on-chain id.
+    //
+    // Crucially, the chain path FALLS BACK to the oracle on any failure. The hosted
+    // Studio sandbox can reset and wipe the contracts, and the public testnet can
+    // be unreachable — neither should ever dead-end a player who just won a fight.
+    // A down chain fails fast (contract not found), so the fallback is quick, and
+    // `usingChain` still reports truthfully which path produced the item.
     if (CHAIN_WRITES_ENABLED) {
       const player =
         body.player && /^0x[0-9a-fA-F]{40}$/.test(body.player)
           ? body.player
           : "0x" + "0".repeat(40);
-      const result = await forgeOnChain(body.gameId, body.eventContext, player);
-      return NextResponse.json({ ...result, usingChain: true, usingLLM: true });
+      try {
+        const result = await forgeOnChain(body.gameId, body.eventContext, player);
+        return NextResponse.json({ ...result, usingChain: true, usingLLM: true });
+      } catch (chainErr) {
+        console.warn("on-chain forge failed, falling back to local consensus:", chainErr);
+      }
     }
 
     const result = await forge(body.gameId, body.eventContext);

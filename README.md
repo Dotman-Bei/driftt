@@ -1,4 +1,4 @@
-# Driftt — assets that drift freely between games
+<!--  --># Driftt — assets that drift freely between games
 
 Driftt is a cross-game asset layer. An item you earn in a fantasy dungeon crawler can be
 carried into a sci-fi twin-stick shooter, where it arrives as a real, balanced, playable

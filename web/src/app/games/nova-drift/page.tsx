@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CONTRACTS_DEPLOYED,
@@ -40,6 +40,15 @@ export default function NovaDriftPage() {
   const [forged, setForged] = useState<Item | null>(null);
   const [consensus, setConsensus] = useState<Consensus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const forgeRef = useRef<HTMLDivElement>(null);
+
+  // Bring the forge status into view on a win — it renders below the game canvas,
+  // so otherwise the reward sits off-screen behind the victory overlay.
+  useEffect(() => {
+    if (forging || forged || error) {
+      forgeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [forging, forged, error]);
 
   const onVictory = useCallback(
     async (eventContext: string) => {
@@ -183,6 +192,7 @@ export default function NovaDriftPage() {
       </Section>
 
       {(forging || consensus || error) && (
+        <div ref={forgeRef}>
         <Section>
           <Eyebrow>The forge</Eyebrow>
 
@@ -223,6 +233,7 @@ export default function NovaDriftPage() {
             </div>
           )}
         </Section>
+        </div>
       )}
     </>
   );

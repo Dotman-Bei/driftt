@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CONTRACTS_DEPLOYED,
@@ -40,6 +40,16 @@ export default function EmberfallPage() {
   const [forged, setForged] = useState<Item | null>(null);
   const [consensus, setConsensus] = useState<Consensus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const forgeRef = useRef<HTMLDivElement>(null);
+
+  // The forge status renders below the game canvas, so a win would otherwise
+  // leave the reward off-screen behind the victory overlay. Bring it into view
+  // the moment forging starts, and again when the item lands.
+  useEffect(() => {
+    if (forging || forged || error) {
+      forgeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [forging, forged, error]);
 
   const onVictory = useCallback(
     async (eventContext: string) => {
@@ -169,6 +179,7 @@ export default function EmberfallPage() {
       </Section>
 
       {(forging || consensus || error) && (
+        <div ref={forgeRef}>
         <Section>
           <Eyebrow>The forge</Eyebrow>
 
@@ -210,6 +221,7 @@ export default function EmberfallPage() {
             </div>
           )}
         </Section>
+        </div>
       )}
     </>
   );
