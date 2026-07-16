@@ -7,9 +7,11 @@ import type { Rarity } from "@/lib/types";
 /* ------------------------------------------------------------------- logo */
 
 /**
- * The Driftt mark: brackets around a cobalt diamond — an item held between two
- * worlds. Transparent background, so it sits on the page's dark surface directly.
- * The cobalt diamond is the mark's identity, exempt from the page accent budget.
+ * The Driftt mark: three chevrons drifting rightward, resolving from Asphalt
+ * through Chassis into Kinetic Cobalt — items moving between worlds, the last
+ * step landing on the brand accent. Transparent background, so it sits on the
+ * page's dark surface directly. The cobalt chevron is the mark's identity, exempt
+ * from the page accent budget.
  */
 export function DrifttLogo({ size = 28 }: { size?: number }) {
   return (
@@ -21,9 +23,16 @@ export function DrifttLogo({ size = 28 }: { size?: number }) {
       aria-label="Driftt"
       className="shrink-0"
     >
-      <path d="M18 13 H13 V35 H18" fill="none" stroke="#F5F5F5" strokeWidth="2.4" />
-      <path d="M30 13 H35 V35 H30" fill="none" stroke="#F5F5F5" strokeWidth="2.4" />
-      <polygon points="24,17.5 30.5,24 24,30.5 17.5,24" fill="#110FFF" />
+      <g
+        fill="none"
+        strokeWidth="3.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="11,16 18,24 11,32" stroke="#606060" />
+        <polyline points="20,16 27,24 20,32" stroke="#CACACA" />
+        <polyline points="29,16 36,24 29,32" stroke="#110FFF" />
+      </g>
     </svg>
   );
 }
