@@ -13,20 +13,39 @@ const LINKS = [
 ];
 
 interface Ethereum {
-  request(args: { method: string }): Promise<string[]>;
+  request(args: { method: string; params?: unknown[] }): Promise<unknown>;
 }
 
-async function connectWallet(): Promise<string> {
+async function connectWallet(): Promise<string | null> {
   const eth = (globalThis as { ethereum?: Ethereum }).ethereum;
   if (eth) {
     try {
-      const accounts = await eth.request({ method: "eth_requestAccounts" });
-      if (accounts?.[0]) return accounts[0];
+      // Force the wallet's account-selection popup on EVERY click. After a
+      // disconnect the site still holds MetaMask's prior approval, so a plain
+      // eth_requestAccounts would reconnect silently with no prompt.
+      // wallet_requestPermissions re-opens the picker every time.
+      try {
+        await eth.request({
+          method: "wallet_requestPermissions",
+          params: [{ eth_accounts: {} }],
+        });
+      } catch (err) {
+        // 4001 = the user dismissed the popup — stay disconnected. Any other
+        // code means the wallet doesn't support this method, so fall through to
+        // the standard request (which still prompts on a fresh connection).
+        if ((err as { code?: number })?.code === 4001) return null;
+      }
+      const accounts = (await eth.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+      return accounts?.[0] ?? null;
     } catch {
-      // User declined, or no injected wallet. Fall through to a demo account so
-      // the demo is never gated behind a wallet install.
+      // User dismissed the connection request — do not connect.
+      return null;
     }
   }
+  // No injected wallet on this machine — fall back to a demo account so the app
+  // is still usable without installing one.
   const bytes = crypto.getRandomValues(new Uint8Array(20));
   return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
@@ -118,7 +137,10 @@ export function Nav() {
             </button>
           ) : (
             <button
-              onClick={async () => connect(await connectWallet())}
+              onClick={async () => {
+                const addr = await connectWallet();
+                if (addr) connect(addr);
+              }}
               className="font-mono text-xs px-3 sm:px-4 py-2 bg-[#F5F5F5] text-[#070707] font-medium transition-all duration-200 hover:scale-95 active:scale-90 hover:bg-[#110FFF] hover:text-[#F5F5F5]"
             >
               Connect
