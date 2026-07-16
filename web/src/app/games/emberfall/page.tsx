@@ -37,6 +37,7 @@ export default function EmberfallPage() {
   const [equipped, setEquipped] = useState<EquippedWeapon>(STARTER);
   const [forging, setForging] = useState(false);
   const [onChain, setOnChain] = useState(false);
+  const [txId, setTxId] = useState<string | undefined>();
   const [forged, setForged] = useState<Item | null>(null);
   const [consensus, setConsensus] = useState<Consensus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export default function EmberfallPage() {
         if (!res.ok) throw new Error(data.error ?? "the forge failed");
 
         setOnChain(Boolean(data.usingChain));
+        setTxId(data.txId);
         setConsensus(data.consensus);
         if (data.consensus.approved) {
           // On-chain, the item already carries its real registry id and owner;
@@ -217,7 +219,7 @@ export default function EmberfallPage() {
 
           {consensus && !forging && (
             <div className="max-w-3xl">
-              <ConsensusResult consensus={consensus} />
+              <ConsensusResult consensus={consensus} onChain={onChain} txId={txId} />
             </div>
           )}
         </Section>

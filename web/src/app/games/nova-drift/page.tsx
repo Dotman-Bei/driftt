@@ -37,6 +37,7 @@ export default function NovaDriftPage() {
   const [loadout, setLoadout] = useState<Loadout>(STOCK);
   const [forging, setForging] = useState(false);
   const [onChain, setOnChain] = useState(false);
+  const [txId, setTxId] = useState<string | undefined>();
   const [forged, setForged] = useState<Item | null>(null);
   const [consensus, setConsensus] = useState<Consensus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export default function NovaDriftPage() {
         if (!res.ok) throw new Error(data.error ?? "the forge failed");
 
         setOnChain(Boolean(data.usingChain));
+        setTxId(data.txId);
         setConsensus(data.consensus);
         if (data.consensus.approved) {
           setForged(
@@ -229,7 +231,7 @@ export default function NovaDriftPage() {
 
           {consensus && !forging && (
             <div className="max-w-3xl">
-              <ConsensusResult consensus={consensus} />
+              <ConsensusResult consensus={consensus} onChain={onChain} txId={txId} />
             </div>
           )}
         </Section>

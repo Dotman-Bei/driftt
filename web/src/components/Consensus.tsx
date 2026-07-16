@@ -24,7 +24,15 @@ export function ThinkingPulse({ label }: { label: string }) {
  * here and essentially nowhere else — it should feel like a small, earned flash
  * of light against the void.
  */
-export function ConsensusResult({ consensus }: { consensus: Consensus }) {
+export function ConsensusResult({
+  consensus,
+  onChain,
+  txId,
+}: {
+  consensus: Consensus;
+  onChain?: boolean;
+  txId?: string;
+}) {
   const { approved, agreedCount, totalCount, votes, principle, appealed } = consensus;
 
   return (
@@ -40,6 +48,20 @@ export function ConsensusResult({ consensus }: { consensus: Consensus }) {
           ? `${agreedCount} of ${totalCount} validators agreed — balance approved`
           : `Rejected — only ${agreedCount} of ${totalCount} validators agreed`}
       </p>
+
+      {/* Where consensus actually settled — stated plainly so the result never
+          overclaims. On-chain results carry their transaction id. */}
+      {approved && onChain && (
+        <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-center mb-8">
+          <span style={{ color: "#00FF66" }}>Settled on GenLayer ✓</span>
+          {txId && (
+            <span className="text-[#606060]">
+              {" · "}
+              {txId.slice(0, 10)}…{txId.slice(-6)}
+            </span>
+          )}
+        </p>
+      )}
 
       {appealed && (
         <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#606060] mb-8 text-center">

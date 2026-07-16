@@ -23,6 +23,8 @@ export function TranslationPanel({
   phase,
   translation,
   consensus,
+  onChain,
+  txId,
   error,
 }: {
   item: Item;
@@ -30,6 +32,8 @@ export function TranslationPanel({
   phase: Phase;
   translation?: Translation;
   consensus?: Consensus;
+  onChain?: boolean;
+  txId?: string;
   error?: string;
 }) {
   const running = phase === "translating" || phase === "reviewing";
@@ -162,7 +166,7 @@ export function TranslationPanel({
 
       {consensus && (phase === "done" || phase === "failed") && (
         <div className="mt-20 max-w-3xl mx-auto">
-          <ConsensusResult consensus={consensus} />
+          <ConsensusResult consensus={consensus} onChain={onChain} txId={txId} />
         </div>
       )}
     </div>

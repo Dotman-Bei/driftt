@@ -22,6 +22,8 @@ export function TranslateFlow({ itemId }: { itemId: number }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [translation, setTranslation] = useState<Translation | undefined>();
   const [consensus, setConsensus] = useState<Consensus | undefined>();
+  const [onChain, setOnChain] = useState(false);
+  const [txId, setTxId] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
 
   if (!item) {
@@ -56,11 +58,17 @@ export function TranslateFlow({ itemId }: { itemId: number }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item, targetGame: target }),
       });
-      const data = (await res.json()) as TranslateResult & { error?: string };
+      const data = (await res.json()) as TranslateResult & {
+        error?: string;
+        usingChain?: boolean;
+        txId?: string;
+      };
       clearTimeout(toReviewing);
 
       if (!res.ok) throw new Error(data.error ?? "translation failed");
 
+      setOnChain(Boolean(data.usingChain));
+      setTxId(data.txId);
       setConsensus(data.consensus);
 
       if (data.consensus.approved) {
@@ -119,6 +127,8 @@ export function TranslateFlow({ itemId }: { itemId: number }) {
         phase={effectivePhase}
         translation={shown}
         consensus={consensus}
+        onChain={onChain}
+        txId={txId}
         error={error}
       />
     </Section>

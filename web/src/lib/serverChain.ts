@@ -111,12 +111,13 @@ const RETRYABLE = new Set([
  * Transport blips while polling are not a reason to resubmit; we re-poll the same
  * hash so the intelligent method never runs (or gets billed) twice.
  */
-// Overall wall-clock budget for landing a write on-chain. If the chain does not
-// produce a committed result within this window — Studio's latency is variable and
-// it can stall or reset — the whole thing is abandoned and the caller falls back to
-// instant local consensus. A healthy forge/translate lands well inside it; the point
-// is that a stuck chain never hangs the player for minutes.
-const CHAIN_BUDGET_MS = 150_000;
+// Overall wall-clock budget for landing a write on-chain. Studio's latency is
+// variable (tens of seconds to a couple of minutes), so this is generous enough
+// for a slow-but-healthy round to complete. Past it, the write is abandoned and the
+// route returns an error — there is no simulated fallback — so the budget only needs
+// to bound a genuinely stuck chain, not a merely slow one. Keep it under the route's
+// maxDuration (300s).
+const CHAIN_BUDGET_MS = 240_000;
 
 async function send(
   c: ReturnType<typeof client>["client"],
