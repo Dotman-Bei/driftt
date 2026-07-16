@@ -316,7 +316,12 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-10 md:pt-12 border-t border-[#303030]">
-          <DrifttLogo size={32} />
+          <div className="flex items-center gap-3">
+            <DrifttLogo size={28} />
+            <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#606060]">
+              Driftt
+            </span>
+          </div>
           <GenLayerMark showWordmark />
         </div>
       </Section>
