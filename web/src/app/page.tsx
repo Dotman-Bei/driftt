@@ -4,8 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import heroVortex from "@/assets/hero-vortex.jpg";
 import { GAMES } from "@/lib/rulesets";
-import { useDriftt } from "@/lib/store";
-import { ForgeFeed } from "@/components/Feeds";
 import {
   ButtonLink,
   Eyebrow,
@@ -26,8 +24,6 @@ import {
 */
 
 export default function Home() {
-  const { activity } = useDriftt();
-
   return (
     <>
       {/* 1. HERO --------------------------------------------------------- */}
@@ -280,37 +276,6 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* 5. THE FORGE ---------------------------------------------------- */}
-      <Section>
-        <Eyebrow>The forge</Eyebrow>
-        <Headline className="max-w-3xl">Nobody mints anything. You just play.</Headline>
-        <Lede>
-          A gameplay event goes in, and an LLM designs a balanced, themed, lore-bearing
-          item and mints it to you.
-        </Lede>
-
-        <div className="mt-16">
-          {activity.length > 0 ? (
-            <ForgeFeed activity={activity.slice(0, 6)} />
-          ) : (
-            <div className="border-t border-[#303030]">
-              {[
-                "Player defeated the Ashfall Dragon solo at level 12",
-                "Player cleared the Cinder Vault without taking damage",
-                "Player destroyed 100 hostiles in a single Nova Drift run",
-              ].map((line) => (
-                <p
-                  key={line}
-                  className="py-4 border-b border-[#303030] font-mono text-sm text-[#606060]"
-                >
-                  <span className="text-[#CACACA]">event</span> {line}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      </Section>
-
       {/* 6. THE GAMES ---------------------------------------------------- */}
       <Section>
         <Eyebrow>The games</Eyebrow>
@@ -339,15 +304,17 @@ export default function Home() {
       </Section>
 
       {/* 7. CTA / FOOTER ------------------------------------------------- */}
-      <Section>
-        <div className="flex flex-col items-center text-center gap-8 py-12">
-          <h2 className="text-4xl md:text-5xl font-bold text-[#F5F5F5] tracking-tight leading-tight max-w-2xl">
+      {/* pb override trims the tall section padding under the footer row so the
+          page doesn't end on a large empty band. */}
+      <Section className="pb-8 md:pb-10">
+        <div className="flex flex-col items-center text-center gap-8 py-8 md:py-12">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#F5F5F5] tracking-tight leading-tight max-w-2xl">
             Earn it once. Carry it everywhere.
           </h2>
           <ButtonLink href="/games/emberfall">Play Emberfall</ButtonLink>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-12 border-t border-[#303030]">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-10 md:pt-12 border-t border-[#303030]">
           <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#606060]">
             Driftt
           </p>
