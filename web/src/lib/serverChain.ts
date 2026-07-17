@@ -48,10 +48,30 @@ export const CHAIN_WRITES_ENABLED = Boolean(
   process.env.GENLAYER_PRIVATE_KEY && ADDRESSES.registry,
 );
 
+/**
+ * Coerce the deployer key into the 0x-prefixed 32-byte hex that createAccount
+ * (viem underneath) requires. Pasting a key into a host's env-var field commonly
+ * drops the `0x`, wraps it in quotes, or leaves surrounding whitespace — any of
+ * which makes viem throw "invalid private key, expected hex or 32 bytes". Normalise
+ * all of those here instead of failing the forge.
+ */
+function normalizePrivateKey(raw: string): `0x${string}` {
+  let k = raw.trim().replace(/^["']|["']$/g, "").trim();
+  if (k.startsWith("0x") || k.startsWith("0X")) k = k.slice(2);
+  k = k.toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(k)) {
+    throw new Error(
+      "GENLAYER_PRIVATE_KEY is not a 32-byte hex key. Set it to the 64 hex " +
+        "characters of the deployer key (a leading 0x is optional).",
+    );
+  }
+  return `0x${k}`;
+}
+
 function client() {
   const key = process.env.GENLAYER_PRIVATE_KEY;
   if (!key) throw new Error("GENLAYER_PRIVATE_KEY is not set on the server");
-  const account = createAccount(key as `0x${string}`);
+  const account = createAccount(normalizePrivateKey(key));
   return { client: createClient({ chain: chain(), account }), account };
 }
 
