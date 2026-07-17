@@ -16,10 +16,17 @@ import { rarityForPower } from "./types";
 // Read the addresses from the environment directly rather than importing them
 // from the "use client" chain module — a client module imported into a
 // server-only one does not reliably expose its values here.
+// Strip whitespace and surrounding quotes from an address env var. Pasting a
+// contract address into a host's env-var field commonly appends a trailing space
+// or wraps it in quotes, and viem then rejects it ("Address ... is invalid").
+function cleanAddr(raw: string | undefined): string {
+  return (raw ?? "").trim().replace(/^["']|["']$/g, "").trim();
+}
+
 const ADDRESSES = {
-  registry: process.env.NEXT_PUBLIC_ITEM_REGISTRY ?? "",
-  translation: process.env.NEXT_PUBLIC_TRANSLATION_ENGINE ?? "",
-  evolution: process.env.NEXT_PUBLIC_EVOLUTION_TRACKER ?? "",
+  registry: cleanAddr(process.env.NEXT_PUBLIC_ITEM_REGISTRY),
+  translation: cleanAddr(process.env.NEXT_PUBLIC_TRANSLATION_ENGINE),
+  evolution: cleanAddr(process.env.NEXT_PUBLIC_EVOLUTION_TRACKER),
 } as const;
 
 /*

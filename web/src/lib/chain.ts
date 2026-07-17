@@ -26,11 +26,16 @@ import type { GameId, Item, Rarity } from "./types";
   The difference is one env var. Nothing else in the UI changes.
 */
 
+// Strip whitespace/quotes — pasting an address into a host env-var field often
+// leaves a trailing space, which downstream address validation rejects.
+const clean = (raw: string | undefined) =>
+  (raw ?? "").trim().replace(/^["']|["']$/g, "").trim();
+
 export const ADDRESSES = {
-  registry: process.env.NEXT_PUBLIC_ITEM_REGISTRY ?? "",
-  forge: process.env.NEXT_PUBLIC_ITEM_FORGE ?? "",
-  translation: process.env.NEXT_PUBLIC_TRANSLATION_ENGINE ?? "",
-  evolution: process.env.NEXT_PUBLIC_EVOLUTION_TRACKER ?? "",
+  registry: clean(process.env.NEXT_PUBLIC_ITEM_REGISTRY),
+  forge: clean(process.env.NEXT_PUBLIC_ITEM_FORGE),
+  translation: clean(process.env.NEXT_PUBLIC_TRANSLATION_ENGINE),
+  evolution: clean(process.env.NEXT_PUBLIC_EVOLUTION_TRACKER),
 } as const;
 
 /** The Intelligent Contracts are deployed and their addresses are configured. */
