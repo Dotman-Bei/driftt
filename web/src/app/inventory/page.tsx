@@ -42,7 +42,12 @@ export default function InventoryPage() {
     };
   }, [address]);
 
-  const mine = address ? items.filter((i) => i.owner === address) : items;
+  // Compare addresses case-insensitively: wallets (and our demo accounts) hand
+  // back lowercase addresses, while the on-chain owner comes back EIP-55
+  // checksummed, so an exact === would hide every item you actually own.
+  const mine = address
+    ? items.filter((i) => i.owner.toLowerCase() === address.toLowerCase())
+    : items;
 
   return (
     <Section className="border-t-0">
