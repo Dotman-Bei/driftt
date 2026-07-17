@@ -6,7 +6,7 @@
   "contracts": {
     "ItemRegistry": "0xD80f0437ea315638505F93497CC3fFBa77cCCFE4",
     "ItemForge": "0xe00232295c6Ed6f454f9B3A9008069d00d19B9Ba",
-    "TranslationEngine": "0x76b278Ee0274Ac56F9075C4B6C7D6Bc0DC32FA2B",
+    "TranslationEngine": "0x08E0B9329D7e4Af002924930Cd7F8968A23851d9",
     "EvolutionTracker": "0xc7c9B5ad514c9911F1c60b39f3D2dec5E27c5B1A"
   }
 }

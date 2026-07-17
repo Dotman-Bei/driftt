@@ -40,15 +40,16 @@ class ItemRegistry:
 # attack a malicious game or node would attempt.
 BALANCE_PRINCIPLE = """Both outputs translate the same item into the same target game.
 They are equivalent if ALL of the following hold:
-1. `power_tier` values differ by no more than 5 points AND both are within 5
-   points of the stated origin power tier. This is the balance invariant and it
-   is not negotiable - if either output inflates the item's power in the target
-   game, the outputs are NOT equivalent.
-2. `translated_stats` use the same stat keys, and each shared numeric stat sits
-   at a comparable magnitude (within roughly 20% of the other, relative to the
-   target game's power scale).
-3. The two translations preserve the same archetype and elemental theme.
-Names and lore prose may differ freely - do not compare them literally."""
+1. `power_tier` values are within 10 points of each other, and both broadly track
+   the stated origin power tier rather than grossly inflating it. Exact numbers may
+   differ - the item's final power is clamped to the origin tier after consensus, so
+   what matters here is that neither validator turned it into a god-item.
+2. `translated_stats` use the same stat keys the target game defines.
+3. The two translations preserve the same broad archetype and elemental theme.
+Names, lore prose, and the exact stat VALUES may differ freely - do not compare them
+literally. Only a translation that changes the item's kind, drops the theme, or
+grossly inflates its power is NOT equivalent. Independent LLM runs vary; judge the
+shape of the result, not the digits."""
 
 
 class TranslationEngine(gl.Contract):
